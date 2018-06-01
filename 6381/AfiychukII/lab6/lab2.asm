@@ -1,29 +1,30 @@
-TESTPC SEGMENT
-	ASSUME CS:TESTPC, DS:TESTPC, ES:NOTHING, SS:NOTHING
-	ORG 100H
-START:
-	JMP BEGIN
-	
-EOF	EQU '$'
-endl db 0DH,0AH,EOF
-str_inaccess_mem db 'Segment address with the first unavailable byte:', EOF
-str_inaccess_mem_empty db '     ',EOF
-str_env_address db 'Address of an environment segment:',EOF
-str_env_address_empty db '    ',EOF
-str_tail db 'Argv:',EOF
-str_tail_empty db 64 DUP(' '),EOF
-str_tail_err db 'No argv!',EOF
-str_env_content db 'Content of the environment:',0DH,0AH,EOF
-str_path db 'Path of the loaded module:',0DH,0AH,EOF
+.386
+; ������
+DATA SEGMENT
+	STRINACCESSMEMADDRINFO db 'Addres of a segment with first byte of inaccesible memory: $'
+	STRINACCESSMEMADDR db '    $'
+	STRENVADDRINFO db 'Address of an environment segment: $'
+	STRENVADDR db '    $'
+	STRTAILPRNTINFO db 'Tail:$'
+	STRTAIL db 50h DUP(' '),'$'
+	STRNOTAIL db 'There is no tail$'
+	STRENVCONTENTINFO db 'Environment contents:',0DH,0AH,'$'
+	STRPRGRMPATHINFO db 'App path:',0DH,0AH,'$'
+	STRENDL db 0DH,0AH,'$'
+DATA ENDS
 
-; Сокращение для функции вывода.
-PRINT_DX proc near
+TESTPC SEGMENT
+ ASSUME CS:TESTPC, DS:DATA, ES:NOTHING, SS:NOTHING
+; ���������
+;---------------------------------------
+; ��뢠�� ���뢠���, �����饥 ��ப�.
+PRINT PROC near
 	mov AH,09h
 	int 21h
 	ret
-PRINT_DX endp
-
-; Вспомогательная функция из шаблона
+PRINT ENDP
+	
+;---------------------------------------
 TETR_TO_HEX PROC near
 	and AL,0Fh
 	cmp AL,09
@@ -32,8 +33,7 @@ TETR_TO_HEX PROC near
 NEXT: add AL,30h
 	ret
 TETR_TO_HEX ENDP
-
-; байт AL переводится в два символа шестн. числа в AX
+;---------------------------------------
 BYTE_TO_HEX PROC near
 	push CX
 	mov AH,AL
@@ -45,9 +45,9 @@ BYTE_TO_HEX PROC near
 	pop CX 
 	ret
 BYTE_TO_HEX ENDP
-
-;перевод в 16 с/с 16-ти разрядного числа
-;в AX - число, DI - адрес последнего символа
+;---------------------------------------
+; ��ॢ�� � 16�/� 16-� ࠧ�來��� �᫠
+; � AX - �᫮, DI - ���� ��᫥����� ᨬ����
 WRD_TO_HEX PROC near
 	push BX
 	mov BH,AH
@@ -64,16 +64,15 @@ WRD_TO_HEX PROC near
 	pop BX
 	ret
 WRD_TO_HEX ENDP
-
-;перевод в 10с/с, SI - адрес поля младшей цифры
+;---------------------------------------
+; ��ॢ�� � 10�/�, SI - ���� ���� ����襩 ����
 BYTE_TO_DEC PROC near
 	push CX
 	push DX
 	xor AH,AH
 	xor DX,DX
 	mov CX,10
-loop_bd: 
-	div CX
+loop_bd: div CX
 	or DL,30h
 	mov [SI],DL
 	dec SI
@@ -84,180 +83,134 @@ loop_bd:
 	je end_l
 	or AL,30h
 	mov [SI],AL
-end_l: 
-	pop DX
+end_l: pop DX
 	pop CX
 	ret
 BYTE_TO_DEC ENDP
-
-; Печать адреса недоступной памяти
-PRINT_INACCESIBLE_MEMORY proc near
-	push ax
-	push di
-	push dx
-	
-	mov ax,ss:[2]
-	mov di, offset str_inaccess_mem_empty+3
+;---------------------------------------
+; �⥭�� 3,4 ���⮢ PSP(ᥣ���⭮�� ���� ��ࢮ�� ���� ������㯭�� �����) � �� �뢮� � ���᮫�
+GET_INACCESS_MEM_ADDR PROC near
+	push es
+	mov ax,es:[2]
+	mov es,ax
+	mov di,offset STRINACCESSMEMADDR+3
 	call WRD_TO_HEX
-	
-	mov dx, offset str_inaccess_mem
-	call PRINT_DX
-	mov dx, offset endl
-	call PRINT_DX
-	mov dx , offset str_inaccess_mem_empty
-	call PRINT_DX
-	mov dx, offset endl
-	call PRINT_DX
-	
-	pop dx
-	pop di
-	pop ax
+	mov dx,offset STRINACCESSMEMADDRINFO
+	call PRINT
+	mov dx,offset STRINACCESSMEMADDR
+	call PRINT
+	mov dx,offset STRENDL
+	call PRINT
+	;mov ax,01000h 
+	;mov es:[0h],ax ; works in dos
+	pop es
 	ret
-PRINT_INACCESIBLE_MEMORY ENDP
-
-; Печать сегментного адреса среды
-PRINT_ENV_ADDRES PROC near
-	push ax
-	push di
-	push dx
-	
-	mov ax,ss:[2Ch]
-	mov di, offset str_env_address_empty+3
+GET_INACCESS_MEM_ADDR ENDP
+;---------------------------------------
+; �⥭�� �� PSP ᥣ���⭮�� ���� �।�, ��।������� �ணࠬ�� � ��� �뢮� � ���᮫�
+GET_ENV_ADDR PROC near
+	mov ax,es:[2Ch]
+	mov di,offset STRENVADDR+3
 	call WRD_TO_HEX
-	
-	mov dx, offset str_env_address
-	call PRINT_DX
-	mov dx, offset endl
-	call PRINT_DX
-	mov dx, offset str_env_address_empty
-	call PRINT_DX
-	mov dx, offset endl
-	call PRINT_DX
-	
-	pop dx
-	pop di
-	pop ax
+	mov dx,offset STRENVADDRINFO
+	call PRINT
+	mov dx,offset STRENVADDR
+	call PRINT
+	mov dx,offset STRENDL
+	call PRINT
 	ret
-PRINT_ENV_ADDRES ENDP
-
-; Печатает аргументы командой строки
-PRINT_ARGV PROC near
-	push cx
-	push dx
-	push bx
-	
+GET_ENV_ADDR ENDP
+;---------------------------------------
+PRINT_TAIL PROC near
 	xor ch,ch
-	mov cl,ss:[80h]
+	mov cl,es:[80h]
 	
 	cmp cl,0
-	jne TailExist
-	mov dx, offset str_tail_err
-	call PRINT_DX
-	mov dx, offset endl
-	call PRINT_DX
-	pop bx
-	pop dx
-	pop cx
-	ret
-		
-TailExist:
-	mov dx, offset str_tail
-	call PRINT_DX	
-	mov bp, offset str_tail_empty
-	print_char:
-		mov di,cx
-		mov bl,ds:[di+80h]
-		mov ds:[bp+di-2],bl
-	loop print_char
-	mov dx, offset str_tail_empty
-	call PRINT_DX
-	pop bx
-	pop dx
-	pop cx
-	ret
-PRINT_ARGV ENDP
-
-; Печатает содержимое области среды
-PRINT_ENV PROC near
-	push ax
-	push es
-	push bp
-	push dx
-
-	mov ax,ss:[44]
-	mov es,ax
-	xor bp,bp
-PE_cycle1:
-	cmp word ptr es:[bp],1
-	je PE_exit1
-	cmp byte ptr es:[bp],0
-	jne PE_noendl
-	mov dx, offset endl
-	call PRINT_DX
-	inc bp
-PE_noendl:
-	mov dl,es:[bp]
-	mov ah,2
-	int 21h
-	inc bp
-	jmp PE_cycle1
+	jne notnil
+		mov dx,offset STRNOTAIL
+		call PRINT
+		mov dx,offset STRENDL
+		call PRINT
+		ret
+	notnil:
 	
+	mov dx,offset STRTAILPRNTINFO
+	call PRINT
+	
+	mov ah,02h
+	mov di,81h
+	cycle:
+		mov dl,es:[di]
+		int 21h
+		inc di
+	loop cycle
+	
+	ret
+PRINT_TAIL ENDP
+;---------------------------------------
+; ���⠥� ᮤ�ন��� ������ �।�
+PRINT_ENV PROC near
+	mov dx, offset STRENDL
+	call PRINT
+	mov dx, offset STRENVCONTENTINFO
+	call PRINT
+	push es
+	mov ax,es:[2ch]
+	mov es,ax
+	
+	xor bp,bp
+	PE_cycle1:
+		cmp word ptr es:[bp],0001h
+		je PE_exit1
+		cmp byte ptr es:[bp],00h
+		jne PE_noendl
+			mov dx,offset STRENDL
+			call PRINT
+			inc bp
+		PE_noendl:
+		mov dl,es:[bp]
+		mov ah,02h
+		int 21h
+		inc bp
+	jmp PE_cycle1
 	PE_exit1:
 	add bp,2
-	mov dx, offset endl
-	call PRINT_DX
-	mov dx, offset str_path
-	call PRINT_DX
-PE_cycle2:
-	cmp byte ptr es:[bp],0
-	je PE_exit2
-	mov dl,es:[bp]
-	mov ah,2
-	int 21h
-	inc bp
-	jmp PE_cycle2	
-PE_exit2:
-
-	pop dx
-	pop bp
+	
+	mov dx, offset STRENDL
+	call PRINT
+	mov dx, offset STRPRGRMPATHINFO
+	call PRINT
+	
+	PE_cycle2:
+		cmp byte ptr es:[bp],00h
+		je PE_exit2
+		mov dl,es:[bp]
+		mov ah,02h
+		int 21h
+		inc bp
+	jmp PE_cycle2
+	PE_exit2:
 	pop es
-	pop ax
 	ret
 PRINT_ENV ENDP
-
-BEGIN:
-	mov dx, offset endl
-	call PRINT_DX
-
-	call PRINT_INACCESIBLE_MEMORY
-	mov dx, offset endl
-	call PRINT_DX	
-
-	call PRINT_ENV_ADDRES
-	mov dx, offset endl
-	call PRINT_DX
-
-	call PRINT_ARGV
-	mov dx, offset endl
-	call PRINT_DX
-
-	mov dx, offset str_env_content
-	call PRINT_DX
-
+;---------------------------------------
+_BEGIN:
+	mov ax,DATA
+	mov ds,ax
+	call GET_INACCESS_MEM_ADDR
+	call GET_ENV_ADDR
+	call PRINT_TAIL
 	call PRINT_ENV
-	mov dx, offset endl
-	call PRINT_DX
-	mov dl, 20h
-	mov ah, 02h ;вывод символа на экран
+	; xor AL,AL
+	mov dx,offset STRENDL
+	call PRINT
+	mov ah,01h
 	int 21h
-	
-	mov AH, 01h ;Клавиатурный ввод символа (код символа помещается в регистр AL)
-	int 21h
-					
-; выход в DOS
-	xor al, al
-	mov ah, 4ch
-	int 21h
-	
+	;mov dl,al
+	;mov ah,02h
+	;int 21h
+	call PRINT
+	mov AH,4Ch
+	int 21H
 TESTPC ENDS
- END START
+ END _BEGIN
