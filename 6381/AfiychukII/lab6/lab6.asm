@@ -1,254 +1,252 @@
 CODE SEGMENT
- ASSUME CS:CODE, DS:DATA, ES:DATA, SS:STACKSEG
-START: JMP BEGIN
-; ПРОЦЕДУРЫ
-;---------------------------------------
-; Вызывает прерывание, печатающее строку.
-PRINT PROC near
-	push ax
-	mov AH,09h
-	int 21h
-	pop ax
-	ret
-PRINT ENDP
-;---------------------------------------
-TETR_TO_HEX PROC near
-	and AL,0Fh
-	cmp AL,09
-	jbe NEXT
-	add AL,07
-NEXT: add AL,30h
-	ret
-TETR_TO_HEX ENDP
-;---------------------------------------
-BYTE_TO_HEX PROC near
-	push CX
-	mov AH,AL
-	call TETR_TO_HEX
-	xchg AL,AH
-	mov CL,4
-	shr AL,CL
-	call TETR_TO_HEX 
-	pop CX 
-	ret
-BYTE_TO_HEX ENDP
-;---------------------------------------
-; Функция освобождения лишней памяти
-FREE_MEM PROC
-	; Вычисляем в BX необходимое количество памяти для этой программы в параграфах
-		mov ax,STACKSEG ; В ax сегментный адрес стека
-		mov bx,es
-		sub ax,bx ; Вычитаем сегментный адрес PSP
-		add ax,10h ; Прибавляем размер стека в параграфах
-		mov bx,ax
-	; Пробуем освободить лишнюю память
-		mov ah,4Ah
-		int 21h
-		jnc FREE_MEM_SUCCESS
-	
-	; Обработка ошибок
-		mov dx,offset STR_ERR_FREE_MEM
-		call PRINT
-		cmp ax,7
-		mov dx,offset STR_ERR_MCB_DESTROYED
-		je FREE_MEM_PRINT_ERROR
-		cmp ax,8
-		mov dx,offset STR_ERR_NOT_ENOUGH_MEM
-		je FREE_MEM_PRINT_ERROR
-		cmp ax,9
-		mov dx,offset STR_ERR_WRNG_MEM_BL_ADDR
-		
-		FREE_MEM_PRINT_ERROR:
-		call PRINT
-		mov dx,offset STRENDL
-		call PRINT
-	
-	; Выход в DOS
-		xor AL,AL
-		mov AH,4Ch
-		int 21H
-	
-	FREE_MEM_SUCCESS:
-	ret
-FREE_MEM ENDP
-;---------------------------------------
-; Функция создания блока параметров
-CREATE_PARAM_BLOCK PROC
-	mov ax, es:[2Ch]
-	mov PARMBLOCK,ax ; Кладём сегментный адрес среды
-	mov PARMBLOCK+2,es ; Сегментный адрес параметров командной строки(PSP)
-	mov PARMBLOCK+4,80h ; Смещение параметров командной строки
-	ret
-CREATE_PARAM_BLOCK ENDP
-;---------------------------------------
-; Функция запуска дочернего процесса
-RUN_CHILD PROC
-	mov dx,offset STRENDL
-	call PRINT
-	; Устанавливаем DS:DX на имя вызываемой программы
-		
-		mov dx,offset STD_CHILD_PATH
-		; Смотрим, есть ли хвост
-		xor ch,ch
-		mov cl,es:[80h]
-		cmp cx,0
-		je RUN_CHILD_NO_TAIL ; Если нет хвоста, то используем стандартное имя вызываемой программы
-		mov si,cx ; si - номер копируемого символа
-		push si ; Сохраняем кол-во символов
-		RUN_CHILD_LOOP:
-			mov al,es:[81h+si]
-			mov [offset CHILD_PATH+si-1],al			
-			dec si
-		loop RUN_CHILD_LOOP
-		pop si
-		mov [CHILD_PATH+si-1],0 ; Кладём в конец 0
-		mov dx,offset CHILD_PATH ; Хвост есть, используем его
-		RUN_CHILD_NO_TAIL:
-		
-	; Устанавливаем ES:BX на блок параметров
-		push ds
-		pop es
-		mov bx,offset PARMBLOCK
+ ASSUME CS:CODE, DS:DATA, ES:DATA, ss:STACK
 
-	; Сохраняем SS, SP
-		mov KEEP_SP, SP
-		mov KEEP_SS, SS
+START: jmp MAIN
+
+; ╨б╨╛╨║╤А╨░╤Й╨╡╨╜╨╕╨╡ ╨┤╨╗╤П ╤Д╤Г╨╜╨║╤Ж╨╕╨╕ ╨▓╤Л╨▓╨╛╨┤╨░.
+PRINT_DX proc near
+	mov ah,09h
+	int 21h
+	ret
+PRINT_DX endp
+
+
+; ╨Я╨╛╨╗╨╛╨▓╨╕╨╜╨░ ╨▒╨░╨╣╤В AL ╨┐╨╡╤А╨╡╨▓╨╛╨┤╨╕╤В╤Б╤П ╨▓ ╤Б╨╕╨╝╨▓╨╛╨╗ ╤И╨╡╤Б╤В╨╜╨░╨┤╤Ж╨░╤В╨╕╤А╨╕╤З╨╜╨╛╨│╨╛ ╤З╨╕╤Б╨╗╨░ ╨▓ AL
+TETR_TO_HEX	proc near 
+    and	al, 0Fh
+    cmp	al, 09
+    jbe	NEXT 
+    add	al, 07
+NEXT:	
+    add		al, 30h
+    ret
+TETR_TO_HEX	endp
+
+
+; ╨С╨░╨╣╤В AL ╨┐╨╡╤А╨╡╨▓╨╛╨┤╨╕╤В╤Б╤П ╨▓ ╨┤╨▓╨░ ╤Б╨╕╨╝╨▓╨╛╨╗╨░ ╤И╨╡╤Б╤В╨╜╨░╨┤╤Ж╨░╤В╨╕╤А╨╕╤З╨╜╨╛╨│╨╛ ╤З╨╕╤Б╨╗╨░ ╨▓ AX
+BYTE_TO_HEX	proc near 
+    push cx
+    mov	ah, al 
+    call TETR_TO_HEX
+    xchg al, ah 
+    mov	cl, 4 
+    shr	al, cl 
+    call TETR_TO_HEX 
+    pop	cx 			
+    ret
+BYTE_TO_HEX	endp
+
+
+INIT_PARAM_DATA_BLOCK proc
+	mov ax, es
+	mov ParamDataBlock,0
+	mov ParamDataBlock+2, ax
+	mov ParamDataBlock+4, 80h
+	mov ParamDataBlock+6, ax
+	mov ParamDataBlock+8, 5Ch
+	mov ParamDataBlock+10, ax
+	mov ParamDataBlock+12, 6Ch
+	ret
+INIT_PARAM_DATA_BLOCK endp
+
+
+; ╨Ю╤Б╨▓╨╛╨▒╨╛╨╢╨┤╨╡╨╜╨╕╨╡ ╨╝╨╡╤Б╤В╨░ ╨▓ ╨┐╨░╨╝╤П╤В╨╕
+FREE_MEM proc 
+	mov bx, offset LAST_BYTE
+	mov ax, es ;es-╨╜╨░╤З╨░╨╗╨╛
+	sub bx, ax
+	mov cl, 4h
+	shr bx, cl
+	; ╨▓ BX ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨┐╨░╤А╨░╨│╤А╨░╤Д╨╛╨▓, ╨║╨╛╤В╨╛╤А╤Л╨╡ ╨▒╤Г╨┤╤Г╤В ╨▓╤Л╨┤╨╡╨╗╤П╤В╤М╤Б╤П ╨╝╨╛╨┤╤Г╨╗╤О
+
+	mov ah,4Ah 
+	int 21h
+	jnc NO_ERROR ; CF=0 ╨┐╤А╨╕ ╨╛╤В╤Б╤Г╤В╤Б╤В╨▓╨╕╨╕ ╨╛╤И╨╕╨▒╨╛╨║
 	
-	; Вызываем загрузчик:
-		mov ax,4b00h
-		int 21h
-		jnc RUN_CHILD_SUCCESS
+	;o╨▒╤А╨░╨▒╨╛╤В╨║╨░ ╨╛╤И╨╕╨▒╨╛╨║ (╨╡╤Б╨╗╨╕ CF != 0, ╤В╨╛ ╨▓ AX  - ╨║╨╛╨┤ ╨╛╤И╨╕╨▒╨║╨╕)
+	cmp ax, 7 
+	mov dx, offset str_err_mcb_damaged
+	je IS_ERROR
+	cmp ax, 8 
+	mov dx, offset str_err_addr_incorrect
+	je IS_ERROR
+	cmp ax, 9 
+	mov dx, offset str_err_addr_incorrect
 	
-	; Восстанавливаем DS, SS, SP
-		push ax
-		mov ax,DATA
-		mov ds,ax
-		pop ax
-		mov SS,KEEP_SS
-		mov SP,KEEP_SP
+IS_ERROR:
+	call PRINT_DX
+	xor al,al
+	mov ah,4Ch
+	int 21H
+NO_ERROR:
+	ret
+FREE_MEM endp
+
+
+RUN_PROCESS proc 	
+	mov es, es:[2Ch]
+	mov si, 0
+
+HANDLE_ENVIR:
+	mov dl, es:[si]
+	cmp dl, 00
+	je DO_END_OF_LINE	
+	inc si
+	jmp HANDLE_ENVIR
+
+DO_END_OF_LINE:
+	inc si
+	mov dl, es:[si]
+	cmp dl, 00
+	jne HANDLE_ENVIR	
+	add si, 03
+	push di
+	lea di, PATH
+
+HANDLE_PATH:
+	mov dl, es:[si]
+	cmp dl, 00
+	je DO_END_OF_LINE_AGAIN	
+	mov [di], dl	
+	inc di			
+	inc si	
+	jmp HANDLE_PATH
+
+DO_END_OF_LINE_AGAIN:
+	sub di, 05h	
+	mov [di], byte ptr '2'	
+	mov [di+2], byte ptr 'C'
+	mov [di+3], byte ptr 'O'
+	mov [di+4], byte ptr 'M'
+	mov [di+5], byte ptr 0h
+	pop di
+	mov KEEP_SP, SP
+	mov KEEP_SS, SS
+	push ds
+	pop es
+	mov bx, offset ParamDataBlock
+	mov dx, offset PATH
+	mov ax, 4B00h
+	int 21h
+	jnc IS_LOADED
 	
-	; Обрабатываем ошибки:
-		cmp ax,1
-		mov dx,offset STR_ERR_WRNG_FNCT_NUMB
-		je RUN_CHILD_PRINT_ERROR
-		cmp ax,2
-		mov dx,offset STR_ERR_FL_NOT_FND
-		je RUN_CHILD_PRINT_ERROR
-		cmp ax,5
-		mov dx,offset STR_ERR_DISK_ERR
-		je RUN_CHILD_PRINT_ERROR
-		cmp ax,8
-		mov dx,offset STR_ERR_NOT_ENOUGH_MEM2
-		je RUN_CHILD_PRINT_ERROR
-		cmp ax,10
-		mov dx,offset STR_ERR_WRONG_ENV_STR
-		je RUN_CHILD_PRINT_ERROR
-		cmp ax,11
-		mov dx,offset STR_ERR_WRONG_FORMAT	
-		je RUN_CHILD_PRINT_ERROR
-		mov dx,offset STR_ERR_UNKNWN
-		RUN_CHILD_PRINT_ERROR:
-		call PRINT
-		mov dx,offset STRENDL
-		call PRINT
+	push ax
+	mov ax, DATA
+	mov ds, ax
+	pop ax
+	mov SS, KEEP_SS
+	mov SP, KEEP_SP
 	
-	; Выходим в DOS
-		xor AL,AL
-		mov AH,4Ch
-		int 21H
+	cmp ax, 1
+	mov dx, offset str_err_func_number_incorrect
+	je SIMPLE_EXIT
+
+	cmp ax, 2
+	mov dx, offset str_err_file_not_found
+	je SIMPLE_EXIT
+
+	cmp ax, 5
+	mov dx, offset str_err_disk
+	je SIMPLE_EXIT
+
+	cmp ax, 8
+	mov dx, offset str_err_mem_val_incorrect
+	je SIMPLE_EXIT
+
+	cmp ax, 10
+	mov dx, offset str_err_env_val_incorrect
+	je SIMPLE_EXIT
+
+	cmp ax, 11
+	mov dx, offset str_err_format_incorrect
+	je SIMPLE_EXIT
+	
+SIMPLE_EXIT:
+	call PRINT_DX
+	
+	xor al ,al
+	mov ah, 4Ch
+	int 21h
 		
-	RUN_CHILD_SUCCESS:
+IS_LOADED:
 	mov ax,4d00h
 	int 21h
-	; Вывод причины завершения
-		cmp ah,0
-		mov dx,offset STR_NRML_END
-		je RUN_CHILD_PRINT_END_RSN
-		cmp ah,1
-		mov dx,offset STR_CTRL_BREAK
-		je RUN_CHILD_PRINT_END_RSN
-		cmp ah,2
-		mov dx,offset STR_DEVICE_ERROR
-		je RUN_CHILD_PRINT_END_RSN
-		cmp ah,3
-		mov dx,offset STR_RSDNT_END
-		je RUN_CHILD_PRINT_END_RSN
-		mov dx,offset STR_UNKNWN
-		RUN_CHILD_PRINT_END_RSN:
-		call PRINT
-		mov dx,offset STRENDL
-		call PRINT
+	
+	cmp ah, 0
+	mov dx, offset str_end_normal
+	je EXIT_WITH_MES
+	cmp ah, 1
+	mov dx, offset str_end_ctrl_end
+	je EXIT_WITH_MES
+	cmp ah, 2
+	mov dx, offset str_err_device
+	je EXIT_WITH_MES
+	cmp ah, 3
+	mov dx, offset str_end_31h
 
-	; Вывод кода завершения:
-		mov dx,offset STR_END_CODE
-		call PRINT
-		call BYTE_TO_HEX
-		push ax
-		mov ah,02h
-		mov dl,al
-		int 21h
-		pop ax
-		xchg ah,al
-		mov ah,02h
-		mov dl,al
-		int 21h
-		mov dx,offset STRENDL
-		call PRINT
-
+EXIT_WITH_MES:
+	call PRINT_DX
+	mov di, offset END_CODE
+	call BYTE_TO_HEX
+	add di, 0Ah
+	mov [di], al
+	add di, 1
+	xchg ah, al
+	mov [di], al
+	mov dx, offset END_CODE
+	call PRINT_DX
 	ret
-RUN_CHILD ENDP
-;---------------------------------------
-BEGIN:
-	mov ax,data
-	mov ds,ax
-	
-	call FREE_MEM
-	call CREATE_PARAM_BLOCK
-	call RUN_CHILD
-	
-	xor AL,AL
-	mov AH,4Ch
-	int 21H
+RUN_PROCESS ENDP
+
+
+MAIN:
+	mov ax, DATA
+	mov ds, ax
+	call FREE_MEM 
+	call INIT_PARAM_DATA_BLOCK
+	call RUN_PROCESS
+
+	xor al,al
+	mov ah,4Ch ;╨▓╤Л╤Е╨╛╨┤ 
+	int 21h
+
+LAST_BYTE:
 CODE ENDS
-; ДАННЫЕ
+
+
 DATA SEGMENT
-	; Строки ошибок:
-		STR_ERR_FREE_MEM	 		db 'Error when freeing memory: $'
-		STR_ERR_MCB_DESTROYED 		db 'MCB is destroyed$'
-		STR_ERR_NOT_ENOUGH_MEM 		db 'Not enough memory for function processing$'
-		STR_ERR_WRNG_MEM_BL_ADDR 	db 'Wrong addres of memory block$'
-		STR_ERR_UNKNWN				db 'Unknown error$'
-		
-		; Ошибки от загрузчика OS
-		STR_ERR_WRNG_FNCT_NUMB		db 'Function number is wrong$'
-		STR_ERR_FL_NOT_FND			db 'File is not found$'
-		STR_ERR_DISK_ERR			db 'Disk error$'
-		STR_ERR_NOT_ENOUGH_MEM2		db 'Not enough memory$'
-		STR_ERR_WRONG_ENV_STR		db 'Wrong environment string$'
-		STR_ERR_WRONG_FORMAT		db 'Wrong format$'
-	; Строки, содержащие причины завершения дочерней программы
-		STR_NRML_END		db 'Normal end$'
-		STR_CTRL_BREAK		db 'End by Ctrl-Break$'
-		STR_DEVICE_ERROR	db 'End by device error$'
-		STR_RSDNT_END		db 'End by 31h function$'
-		STR_UNKNWN			db 'End by unknown reason$'
-		STR_END_CODE		db 'End code: $'
-		
-	STRENDL db 0DH,0AH,'$'
-	; Блок параметров. Перед загрузкой дочерней программы на него должен указывать ES:BX
-	PARMBLOCK 	dw 0 ; Сегментный адрес среды
-				dd ? ; Сегментный адрес и смещение параметров командной строки
-				dd 0 ; Сегмент и смещение первого FCB
-				dd 0 ; Второго
-	
-	CHILD_PATH  	db 50h dup ('$')
-	STD_CHILD_PATH	db 'LAB2.EXE',0
-	; Переменные для хранения SS, SP
-	KEEP_SS dw 0
-	KEEP_SP dw 0
+    ParamDataBlock    	dw ? ;╤Б╨╡╨│╨╝╨╡╨╜╤В╨╜╤Л╨╣ ╨░╨┤╤А╨╡╤Б ╤Б╤А╨╡╨┤╤Л
+                        dd ? ;╤Б╨╡╨│╨╝╨╡╨╜╤В ╨╕ ╤Б╨╝╨╡╤Й╨╡╨╜╨╕╨╡ ╨║╨╛╨╝╨░╨╜╨┤╨╜╨╛╨╣ ╤Б╤В╤А╨╛╨║╨╕
+                        dd ? ;╤Б╨╡╨│╨╝╨╡╨╜╤В ╨╕ ╤Б╨╝╨╡╤Й╨╡╨╜╨╕╨╡ ╨┐╨╡╤А╨▓╨╛╨│╨╛ FCB
+                        dd ? ;╤Б╨╡╨│╨╝╨╡╨╜╤В ╨╕ ╤Б╨╝╨╡╤Й╨╡╨╜╨╕╨╡ ╨▓╤В╨╛╤А╨╛╨│╨╛ FCB
+    ; end_of_param_block
+
+	str_err_mcb_damaged             DB 0DH, 0AH, 'Memory control unit has been damaged!',0DH,0AH,'$'
+	str_err_func_number_incorrect   DB 0DH, 0AH, 'The number of function is incorrect!',0DH,0AH,'$'
+	str_err_not_enough_mem          DB 0DH, 0AH, 'Not enough memory to perform the function!',0DH,0AH,'$'
+	str_err_addr_incorrect          DB 0DH, 0AH, 'Incorrect address of the memory block!',0DH,0AH,'$'
+	str_err_disk                    DB 0DH, 0AH, 'Disk reading error!',0DH,0AH,'$'
+	str_err_file_not_found          DB 0DH, 0AH, 'File not found!',0DH,0AH,'$'
+	str_err_format_incorrect        DB 0DH, 0AH, 'Incorrect format!',0DH,0AH,'$'
+	str_err_mem_val_incorrect       DB 0DH, 0AH, 'Incorrect value of memory!',0DH,0AH,'$'
+	str_err_device                  DB 0DH, 0AH, 'Completion-device error!',0DH,0AH,'$'
+	str_err_env_val_incorrect       DB 0DH, 0AH, 'Incorrect environment string!',0DH,0AH,'$'
+    ; end_of_errors_sector
+
+	str_end_ctrl_end                DB 0DH, 0AH, 'Module has beem ended by Ctrl-Break!',0DH,0AH,'$'
+	str_end_normal                  DB 0DH, 0AH, 'Module has been ended is normal way!',0DH,0AH,'$'
+	str_end_31h                     DB 0DH, 0AH, 'Completion by function 31h!',0DH,0AH,'$'
+    ; end_of_endings_sector
+
+	PATH 	 DB '                                               ',0DH,0AH,'$',0
+	KEEP_SS  DW 0
+	KEEP_SP  DW 0
+	END_CODE DB 'End code:   ',0DH,0AH,'$'
+    ; end_of_help_sector
 DATA ENDS
-; СТЕК
-STACKSEG SEGMENT STACK
-	dw 80h dup (?) ; 100h байт
-STACKSEG ENDS
- END START
+
+STACK SEGMENT STACK
+	DW 64 DUP (?)
+STACK ENDS
+
+END START
